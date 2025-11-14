@@ -10,5 +10,13 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    DATABASE_USER: str
+    DATABASE_PASSWORD: str
+    DATABASE_NAME: str
+    DATABASE_HOST: str
+    DATABASE_PORT: int
+
+    DATABASE_URL: str
+
 # สร้าง instance เพื่อให้ import ไปใช้ที่อื่นได้
 settings = Settings()
