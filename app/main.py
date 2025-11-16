@@ -4,12 +4,9 @@ from datetime import timedelta
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
-
-# --- Import ใหม่ของเรา ---
 from sqlalchemy.ext.asyncio import AsyncSession
 from app import crud, models, schemas # <-- Import ห้องครัว, ตาราง, API
 from app.database import engine, Base, get_db # <-- Import เครื่องยนต์, รุ่นพ่อ, คนงาน
-
 from app.config import settings
 from app.security import (
     verify_password, 
@@ -19,8 +16,8 @@ from app.security import (
 )
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, BackgroundTasks
 import time
-
-log = logging.getLogger("uvicorn.error")
+from app import processing
+import sqlalchemy as sa
 
 # --- "สร้าง" ตาราง (Table) ---
 # เราจะบอกให้แอป "สร้างตาราง" (ถ้ายังไม่มี) ตอนที่มันเริ่มทำงาน
@@ -67,14 +64,6 @@ async def get_current_user(
         )
 
     return user
-
-# --- Dummy funcition AI ---
-async def process_document_in_background(document_name: str):
-    """(Dummy) AI processing function."""
-    log.info(f"--- 🤖 BACKGROUND TASK: START ---") # <-- แก้
-    log.info(f"Processing document: {document_name}") # <-- แก้
-    await asyncio.sleep(10)
-    log.info(f"--- 🤖 BACKGROUND TASK: DONE ---") # <-- แก้
 
 # --- Endpoints ---
 
@@ -154,21 +143,100 @@ async def read_users_me(
     # จาก current_user (models.User) ให้เราเอง
     return current_user
 
-# Endpoint "รับข้อมูล" (Data Ingestion)
-@app.post("/documents/upload")
-async def upload_document(
-    file: UploadFile = File(...) # <-- "รับ" ไฟล์
+# Endpoint "รับข้อมูล"
+@app.post("/documents/", response_model=schemas.Document)
+async def create_document_and_upload_file(
+    db: AsyncSession = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user), 
+    file: UploadFile = File(...)
 ):
-    # (เรายังไม่เซฟไฟล์จริง... เราแค่ "อ่าน" ชื่อมัน)
-    filename = file.filename
+    # --- "แก้" ตรงนี้ (1/3) ---
+    # "อ่าน" เนื้อใน (Bytes) "ทันที"
+    content = await file.read()
+    # ---------------------------
 
-    # "โยน" งานหนักไปทำเบื้องหลัง
-    asyncio.create_task(
-        process_document_in_background(filename)
+    db_doc = await crud.create_document(
+        db=db, 
+        filename=file.filename, 
+        owner_id=current_user.id
     )
 
-    # "ตอบ" User กลับไป "ทันที"
-    return {
-        "message": "File received. Processing started in background.",
-        "filename": filename
-    }
+    # --- "แก้" ตรงนี้ (2/3) ---
+    # "ส่ง" 'เนื้อใน' (content) เข้าไป... ไม่ใช่ 'ไฟล์' (object)
+    asyncio.create_task(
+        process_and_update_db(
+            db=db, 
+            doc_id=db_doc.id,
+            filename=file.filename,
+            content_type=file.content_type,
+            content=content # <-- ส่ง "เนื้อใน"
+        )
+    )
+    # ---------------------------
+
+    return db_doc
+
+
+# "ฟังก์ชัน" ที่จะรันเบื้องหลัง
+async def process_and_update_db(
+    db: AsyncSession, 
+    doc_id: int,
+    filename: str,      # <-- "แก้" (3/3) รับตัวแปรใหม่
+    content_type: str,  # <-- "แก้" (3/3) รับตัวแปรใหม่
+    content: bytes      # <-- "แก้" (3/3) รับตัวแปรใหม่
+):
+    """
+    Task เบื้องหลัง (ที่เรียก "ห้องครัว" processing)
+    """
+    extracted_text = await processing.save_and_extract_text(
+        # "ส่ง" ทุกอย่างต่อให้ "ห้องครัว"
+        document_id=doc_id,
+        filename=filename,
+        content_type=content_type,
+        content=content
+    )
+
+    if extracted_text is not None:
+        await crud.update_document_text(
+            db=db,
+            document_id=doc_id,
+            text=extracted_text
+        )
+    return
+
+# (ใหม่!) Endpoint "ดูเอกสารทั้งหมด"
+@app.get("/documents/", response_model=list[schemas.Document])
+async def read_documents(
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # (เราจะ "ขี้เกียจ" ... เราจะไปเขียน CRUD ทีหลัง)
+    # (ตอนนี้... เราจะ "Query" มันตรงนี้เลย)
+    stmt = (
+        sa.select(models.Document)
+        .where(models.Document.owner_id == current_user.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all() # <-- คืนค่าทั้งหมด
+
+
+# (ใหม่!) Endpoint "ดูเอกสาร (ฉบับเต็ม)"
+@app.get("/documents/{doc_id}", response_model=schemas.DocumentDetail)
+async def read_document_detail(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # (Query)
+    stmt = (
+        sa.select(models.Document)
+        .where(models.Document.id == doc_id)
+        .where(models.Document.owner_id == current_user.id) # <-- เช็กเจ้าของ
+    )
+    result = await db.execute(stmt)
+    db_doc = result.scalar_one_or_none() # <-- หา 1 อัน
+
+    if db_doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return db_doc

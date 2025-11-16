@@ -1,5 +1,6 @@
-# app/schemas.py
 from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
+import datetime
 
 # --- Pydantic Models (Schemas) ---
 
@@ -35,3 +36,17 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: str | None = None
+
+class DocumentBase(BaseModel):
+    id: int
+    filename: str
+    uploaded_at: datetime.datetime # <-- Import datetime ด้วย
+
+class Document(DocumentBase):
+    owner_id: int
+
+    class Config:
+        from_attributes = True
+
+class DocumentDetail(Document):
+    extracted_text: str | None = None

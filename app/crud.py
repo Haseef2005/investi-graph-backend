@@ -1,4 +1,4 @@
-# app/crud.py
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -48,3 +48,40 @@ async def create_user(db: AsyncSession, user: schemas.UserCreate):
     await db.refresh(db_user) # <-- Refresh (เพื่อให้ได้ id ที่เพิ่งสร้าง)
 
     return db_user
+
+# "C" - Create (สำหรับ Document)
+async def create_document(
+    db: AsyncSession, 
+    filename: str, 
+    owner_id: int
+) -> models.Document:
+    """
+    สร้าง "ระเบียน" (Record) ของ Document (แบบ "ว่างเปล่า")
+    """
+    db_document = models.Document(
+        filename=filename,
+        owner_id=owner_id
+    )
+    db.add(db_document)
+    await db.commit()
+    await db.refresh(db_document) # <-- Refresh (เพื่อให้ได้ ID)
+    return db_document
+
+# "U" - Update (สำหรับ Document)
+async def update_document_text(
+    db: AsyncSession, 
+    document_id: int, 
+    text: str
+):
+    """
+    "อัปเดต" text ที่สกัดได้ ลง DB
+    """
+    # (เราจะใช้ Query ดิบ... เพราะมันเร็วกว่า Select)
+    stmt = (
+        sa.update(models.Document)
+        .where(models.Document.id == document_id)
+        .values(extracted_text=text)
+    )
+    await db.execute(stmt)
+    await db.commit()
+    return
