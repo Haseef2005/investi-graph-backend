@@ -67,12 +67,7 @@ async def create_document(
     await db.refresh(db_document) # <-- Refresh (เพื่อให้ได้ ID)
     return db_document
 
-# "U" - Update (สำหรับ Document)
-async def update_document_text(
-    db: AsyncSession, 
-    document_id: int, 
-    text: str
-):
+
     """
     "อัปเดต" text ที่สกัดได้ ลง DB
     """

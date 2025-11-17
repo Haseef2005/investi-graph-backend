@@ -25,7 +25,7 @@ services:
 
   # --- 2. บริการ "ฐานข้อมูล" (PostgreSQL) ---
   db:
-    image: postgres:15 # "ดึง" Image สำเร็จรูปของ Postgres 15 มาเลย
+    image: pgvector/pgvector:pg15 # "ดึง" Image สำเร็จรูปของ Postgres 15 มาเลย
     container_name: investi_db
     environment:
       POSTGRES_USER: ${DATABASE_USER:-postgres}

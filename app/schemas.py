@@ -48,5 +48,22 @@ class Document(DocumentBase):
     class Config:
         from_attributes = True
 
-class DocumentDetail(Document):
-    extracted_text: str | None = None
+# --- Document Schemas (ใหม่) ---
+
+class Document(BaseModel):
+    id: int
+    filename: str
+    uploaded_at: datetime.datetime
+    owner_id: int
+
+    class Config:
+        from_attributes = True
+
+# (ใหม่!)
+class Chunk(BaseModel):
+    id: int
+    text: str
+    document_id: int
+
+    class Config:
+        from_attributes = True

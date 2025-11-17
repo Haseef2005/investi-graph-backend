@@ -143,100 +143,76 @@ async def read_users_me(
     # จาก current_user (models.User) ให้เราเอง
     return current_user
 
-# Endpoint "รับข้อมูล"
+# (ใหม่!) Endpoint "อัปโหลดเอกสาร"
 @app.post("/documents/", response_model=schemas.Document)
 async def create_document_and_upload_file(
     db: AsyncSession = Depends(get_db), 
     current_user: models.User = Depends(get_current_user), 
     file: UploadFile = File(...)
 ):
-    # --- "แก้" ตรงนี้ (1/3) ---
-    # "อ่าน" เนื้อใน (Bytes) "ทันที"
+    # (1) "อ่าน" เนื้อใน (เหมือนเดิม)
     content = await file.read()
-    # ---------------------------
 
+    # (2) "สร้าง" ระเบียน "แม่" (Document)
     db_doc = await crud.create_document(
         db=db, 
         filename=file.filename, 
         owner_id=current_user.id
     )
 
-    # --- "แก้" ตรงนี้ (2/3) ---
-    # "ส่ง" 'เนื้อใน' (content) เข้าไป... ไม่ใช่ 'ไฟล์' (object)
+    # (3) "โยน" งาน "หนัก" (สกัด, หั่น, แปลง, เซฟ)
     asyncio.create_task(
-        process_and_update_db(
-            db=db, 
-            doc_id=db_doc.id,
+        # (เรียก "ห้องครัว" (processing) "โดยตรง")
+        processing.save_extract_chunk_and_embed( 
+            document_id=db_doc.id,
             filename=file.filename,
             content_type=file.content_type,
-            content=content # <-- ส่ง "เนื้อใน"
+            content=content
         )
     )
-    # ---------------------------
 
+    # (4) "ตอบ" User กลับไป "ทันที"
     return db_doc
 
-
-# "ฟังก์ชัน" ที่จะรันเบื้องหลัง
-async def process_and_update_db(
-    db: AsyncSession, 
-    doc_id: int,
-    filename: str,      # <-- "แก้" (3/3) รับตัวแปรใหม่
-    content_type: str,  # <-- "แก้" (3/3) รับตัวแปรใหม่
-    content: bytes      # <-- "แก้" (3/3) รับตัวแปรใหม่
-):
-    """
-    Task เบื้องหลัง (ที่เรียก "ห้องครัว" processing)
-    """
-    extracted_text = await processing.save_and_extract_text(
-        # "ส่ง" ทุกอย่างต่อให้ "ห้องครัว"
-        document_id=doc_id,
-        filename=filename,
-        content_type=content_type,
-        content=content
-    )
-
-    if extracted_text is not None:
-        await crud.update_document_text(
-            db=db,
-            document_id=doc_id,
-            text=extracted_text
-        )
-    return
-
-# (ใหม่!) Endpoint "ดูเอกสารทั้งหมด"
+# (ใหม่!) Endpoint ดูรายการเอกสารของตัวเอง
 @app.get("/documents/", response_model=list[schemas.Document])
 async def read_documents(
-    db: AsyncSession = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    # (เราจะ "ขี้เกียจ" ... เราจะไปเขียน CRUD ทีหลัง)
-    # (ตอนนี้... เราจะ "Query" มันตรงนี้เลย)
-    stmt = (
-        sa.select(models.Document)
-        .where(models.Document.owner_id == current_user.id)
-    )
-    result = await db.execute(stmt)
-    return result.scalars().all() # <-- คืนค่าทั้งหมด
-
-
-# (ใหม่!) Endpoint "ดูเอกสาร (ฉบับเต็ม)"
-@app.get("/documents/{doc_id}", response_model=schemas.DocumentDetail)
-async def read_document_detail(
-    doc_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     # (Query)
     stmt = (
         sa.select(models.Document)
-        .where(models.Document.id == doc_id)
-        .where(models.Document.owner_id == current_user.id) # <-- เช็กเจ้าของ
+        .where(models.Document.owner_id == current_user.id)
     )
     result = await db.execute(stmt)
-    db_doc = result.scalar_one_or_none() # <-- หา 1 อัน
+    return result.scalars().all()
 
-    if db_doc is None:
+# app/main.py
+
+# (ใหม่!) Endpoint "ดู Chunks ของเอกสาร"
+@app.get("/documents/{doc_id}/chunks", response_model=list[schemas.Chunk])
+async def read_document_chunks(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # (เราจะ "Query" 2 ชั้น... เพื่อ "ความปลอดภัย")
+
+    # 1. "เช็ก" ว่า "แม่" (Document) เป็นของเราไหม
+    stmt_doc = (
+        sa.select(models.Document)
+        .where(models.Document.id == doc_id)
+        .where(models.Document.owner_id == current_user.id)
+    )
+    result_doc = await db.execute(stmt_doc)
+    if result_doc.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    return db_doc
+    # 2. "ดึง" "ลูก" (Chunks) ทั้งหมด
+    stmt_chunks = (
+        sa.select(models.Chunk)
+        .where(models.Chunk.document_id == doc_id)
+    )
+    result_chunks = await db.execute(stmt_chunks)
+    return result_chunks.scalars().all()

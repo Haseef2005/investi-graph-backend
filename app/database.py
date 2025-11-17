@@ -1,6 +1,8 @@
 # app/database.py
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.engine import Connection
+from sqlalchemy import event
 
 from app.config import settings
 
@@ -11,6 +13,15 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=True, 
 )
+
+@event.listens_for(engine.sync_engine, "connect")
+def on_connect(dbapi_conn: Connection, connection_record: object) -> None:
+    """
+    "เปิด" (Enable) pgvector extension "ทุกครั้ง" ที่เชื่อมต่อ
+    """
+    cursor = dbapi_conn.cursor()
+    cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    cursor.close()
 
 # 2. สร้าง "พิมพ์เขียว" ของ Session
 #    Session คือ "คนงาน" ที่เราจะจ้างไปคุยกับ DB
