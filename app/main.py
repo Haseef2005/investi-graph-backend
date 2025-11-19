@@ -20,13 +20,28 @@ from app import processing
 import sqlalchemy as sa
 import os
 from app.processing import UPLOAD_DIRECTORY
+from app.knowledge_graph import driver, check_neo4j_connection, close_neo4j_driver
+from contextlib import asynccontextmanager # <--- เพิ่มบรรทัดนี้
+
+# --- (ใหม่!) จัดการ Life Cycle (เปิด/ปิด Neo4j) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 1. ตอนเริ่มแอป: เช็กการเชื่อมต่อ Neo4j
+    if not await check_neo4j_connection():
+        print("⚠️ WARNING: Could not connect to Neo4j!")
+    
+    yield # ปล่อยให้แอปทำงาน
+    
+    # 2. ตอนปิดแอป: ปิดการเชื่อมต่อ
+    await close_neo4j_driver()
 
 # --- "สร้าง" ตาราง (Table) ---
 # เราจะบอกให้แอป "สร้างตาราง" (ถ้ายังไม่มี) ตอนที่มันเริ่มทำงาน
 # (นี่คือวิธีง่ายๆ... Task ต่อไปเราจะใช้ "Alembic" ที่โปรขึ้น)
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan 
 )
 
 # alembic จะจัดการเรื่องตารางให้เราเอง
