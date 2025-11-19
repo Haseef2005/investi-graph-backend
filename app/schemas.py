@@ -76,3 +76,18 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     context: list[Chunk] # Reuse schema 'Chunk' ที่มีอยู่แล้ว
+
+# --- Graph Schemas (สำหรับ Task 10) ---
+class GraphNode(BaseModel):
+    id: str
+    label: str
+    type: str
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    relation: str
+
+class GraphData(BaseModel):
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]

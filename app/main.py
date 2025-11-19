@@ -20,7 +20,7 @@ from app import processing
 import sqlalchemy as sa
 import os
 from app.processing import UPLOAD_DIRECTORY
-from app.knowledge_graph import driver, check_neo4j_connection, close_neo4j_driver
+from app.knowledge_graph import driver, check_neo4j_connection, close_neo4j_driver, get_document_graph
 from contextlib import asynccontextmanager # <--- เพิ่มบรรทัดนี้
 
 # --- (ใหม่!) จัดการ Life Cycle (เปิด/ปิด Neo4j) ---
@@ -328,3 +328,25 @@ async def delete_document(
     await crud.delete_document(db, doc_id)
     
     return None
+
+# (ใหม่!) Endpoint ดึงกราฟ (Task 10)
+@app.get("/documents/{doc_id}/graph", response_model=schemas.GraphData)
+async def get_document_graph_data(
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # 1. เช็กสิทธิ์ก่อน (ห้ามคนอื่นแอบดูกราฟเรา)
+    stmt_doc = (
+        sa.select(models.Document)
+        .where(models.Document.id == doc_id)
+        .where(models.Document.owner_id == current_user.id)
+    )
+    result_doc = await db.execute(stmt_doc)
+    if result_doc.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # 2. ดึงข้อมูลจาก Neo4j
+    graph_data = await get_document_graph(doc_id)
+    
+    return graph_data

@@ -127,3 +127,67 @@ async def store_graph_data(document_id: int, graph_data: dict):
             log.info(f"Graph stored: {len(nodes)} nodes, {len(edges)} edges for Doc {document_id}")
         except Exception as e:
             log.error(f"Neo4j storage failed: {e}")
+
+async def get_document_graph(document_id: int) -> dict:
+    """
+    ดึง Nodes และ Edges ทั้งหมดของเอกสาร ID นี้ออกมาจาก Neo4j
+    """
+    # Cypher Query:
+    # 1. หา Node ทั้งหมดที่มี doc_id นี้
+    # 2. หาความสัมพันธ์ (Relationship) ที่เชื่อมกับ Node เหล่านั้น
+    query = """
+    MATCH (n:Entity {doc_id: $doc_id})
+    OPTIONAL MATCH (n)-[r]->(m)
+    RETURN n, r, m
+    """
+    
+    nodes_dict = {}
+    edges_list = []
+    
+    async with driver.session() as session:
+        result = await session.run(query, doc_id=document_id)
+        
+        async for record in result:
+            # --- 1. จัดการ Node ตั้งต้น (n) ---
+            node_n = record["n"]
+            if node_n:
+                # ใช้ชื่อ (name) เป็น ID
+                n_name = node_n.get("name")
+                n_type = node_n.get("type", "Unknown")
+                # เก็บลง Dict เพื่อตัดตัวซ้ำอัตโนมัติ
+                nodes_dict[n_name] = {
+                    "id": n_name, 
+                    "label": n_name, 
+                    "type": n_type
+                }
+            
+            # --- 2. จัดการ Node ปลายทาง (m) ---
+            # (ต้องเช็กเพราะ OPTIONAL MATCH อาจจะหาไม่เจอ)
+            node_m = record["m"]
+            if node_m:
+                m_name = node_m.get("name")
+                m_type = node_m.get("type", "Unknown")
+                nodes_dict[m_name] = {
+                    "id": m_name, 
+                    "label": m_name, 
+                    "type": m_type
+                }
+
+            # --- 3. จัดการเส้นเชื่อม (r) ---
+            rel = record["r"]
+            if rel and node_n and node_m:
+                # ความสัมพันธ์ใน Neo4j จะมี .type (เช่น RELATED_TO)
+                # แต่เราเก็บชื่อจริงไว้ใน property ชื่อ type ด้วย (ตามโค้ดเก่า) 
+                # หรือจะใช้ rel.type ของ Neo4j เลยก็ได้
+                rel_type = rel.get("type", rel.type) 
+                
+                edges_list.append({
+                    "source": node_n.get("name"),
+                    "target": node_m.get("name"),
+                    "relation": rel_type
+                })
+                
+    return {
+        "nodes": list(nodes_dict.values()),
+        "edges": edges_list
+    }
