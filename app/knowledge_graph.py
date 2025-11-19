@@ -1,16 +1,12 @@
-# app/knowledge_graph.py
-
 import json
 import logging
 from neo4j import AsyncGraphDatabase
 from neo4j.exceptions import ServiceUnavailable
 from app.config import settings
-
-# LLM imports
 from litellm import acompletion
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-# 1. Logger & Driver Setup
+# Logger & Driver Setup
 log = logging.getLogger("uvicorn.error")
 
 driver = AsyncGraphDatabase.driver(
@@ -76,7 +72,7 @@ async def extract_graph_from_text(text_chunk: str) -> dict:
             model=f"{settings.LLM_PROVIDER}/llama-3.1-8b-instant",
             api_key=settings.LLM_API_KEY,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
+            temperature=0.8,
             response_format={"type": "json_object"} # บังคับ JSON (ฟีเจอร์ใหม่ของ Groq/OpenAI)
         )
         
@@ -214,7 +210,7 @@ async def query_graph_context(query_text: str, doc_id: int = None) -> str:
             model=f"{settings.LLM_PROVIDER}/llama-3.1-8b-instant",
             api_key=settings.LLM_API_KEY,
             messages=[{"role": "user", "content": extraction_prompt}],
-            temperature=0.0,
+            temperature=0.8,
             response_format={"type": "json_object"}
         )
         content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()

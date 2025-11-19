@@ -27,9 +27,9 @@ class User(UserBase):
     # บอก Pydantic ให้อ่านจาก "โมเดล" (ORM) ได้
     # (จากเดิมที่มันอ่านจาก Dict)
     class Config:
-        from_attributes = True # <-- (ชื่อเก่าคือ orm_mode)
+        from_attributes = True 
 
-# (Schema ของ Token ไม่ต้องย้ายมาก็ได้ แต่ย้ายมาก็ดี)
+# Schema ของ Token ไม่ต้องย้ายมาก็ได้ แต่ย้ายมาก็ดี
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -40,7 +40,7 @@ class TokenData(BaseModel):
 class DocumentBase(BaseModel):
     id: int
     filename: str
-    uploaded_at: datetime.datetime # <-- Import datetime ด้วย
+    uploaded_at: datetime.datetime 
 
 class Document(DocumentBase):
     owner_id: int
@@ -48,7 +48,7 @@ class Document(DocumentBase):
     class Config:
         from_attributes = True
 
-# --- Document Schemas (ใหม่) ---
+# --- Document Schemas ---
 
 class Document(BaseModel):
     id: int
@@ -59,7 +59,7 @@ class Document(BaseModel):
     class Config:
         from_attributes = True
 
-# (ใหม่!)
+# --- Chunk Schemas ---
 class Chunk(BaseModel):
     id: int
     text: str
@@ -68,16 +68,16 @@ class Chunk(BaseModel):
     class Config:
         from_attributes = True
 
-# (ใหม่!) รับคำถาม
+# รับคำถาม
 class QueryRequest(BaseModel):
     question: str
 
-# (ใหม่!) ส่งคำตอบ + บริบท
+# ส่งคำตอบ + บริบท
 class QueryResponse(BaseModel):
     answer: str
     context: list[Chunk] # Reuse schema 'Chunk' ที่มีอยู่แล้ว
 
-# --- Graph Schemas (สำหรับ Task 10) ---
+# --- Graph Schemas ---
 class GraphNode(BaseModel):
     id: str
     label: str

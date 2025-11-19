@@ -1,12 +1,11 @@
 # app/security.py
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ValidationError
-
-from app.config import settings # Import settings ของเรา
+from app.config import settings 
 
 # --- Password Hashing ---
 
@@ -27,7 +26,7 @@ def get_password_hash(password: str) -> str:
 
 # --- JWT (Token) Handling ---
 
-# นี่คือ "รปภ." ที่คอยดึง Token จาก Header (เหมือนใน main.py)
+# นี่คือ "รปภ." ที่คอยดึง Token จาก Header
 # เราย้ายมาที่นี่ เพื่อให้ get_current_user เรียกใช้ได้
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

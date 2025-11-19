@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app import models, schemas
-from app.security import get_password_hash # <-- Import "เครื่องปั่น"
+from app.security import get_password_hash
 
 # --- CRUD Functions ---
 
@@ -56,7 +56,7 @@ async def create_document(
     owner_id: int
 ) -> models.Document:
     """
-    สร้าง "ระเบียน" (Record) ของ Document (แบบ "ว่างเปล่า")
+    สร้าง Record ของ Document แบบ "ว่างเปล่า"
     """
     db_document = models.Document(
         filename=filename,
@@ -69,7 +69,7 @@ async def create_document(
 
 # "D" - Delete Document
 async def delete_document(db: AsyncSession, document_id: int):
-    # การลบนี้จะดึงความสามารถ Cascade Delete จาก models.py
+    # Cascade Delete จาก models.py
     stmt = sa.delete(models.Document).where(models.Document.id == document_id)
     await db.execute(stmt)
     await db.commit()

@@ -2,17 +2,14 @@ import logging
 import os
 import aiofiles
 from pypdf import PdfReader
-
-from sentence_transformers import SentenceTransformer, CrossEncoder # <--- Import CrossEncoder
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from app import models, crud
 from app.database import SessionLocal
 from app.config import settings
 import sqlalchemy as sa
 from litellm import acompletion
 from tenacity import retry, stop_after_attempt, wait_exponential, wait_fixed
-
 from app import knowledge_graph
 
 UPLOAD_DIRECTORY = "/app/uploads"
@@ -116,7 +113,7 @@ def rerank_chunks(query: str, chunks: list[models.Chunk], top_k: int = 5) -> lis
     return top_chunks
 
 
-# 1. Retrieval (Global) - With Reranking
+# Retrieval (Global) - With Reranking
 async def retrieve_relevant_chunks_global(user_id: int, query_text: str) -> list[models.Chunk]:
     log.info(f"Retrieving global (Stage 1: Vector Search)...")
     query_embedding = EMBEDDING_MODEL.encode(query_text)
@@ -136,7 +133,7 @@ async def retrieve_relevant_chunks_global(user_id: int, query_text: str) -> list
     return rerank_chunks(query_text, initial_chunks, top_k=5) # คัดเหลือ 5
 
 
-# 1. Retrieval (Single Doc) - With Reranking
+# Retrieval (Single Doc) - With Reranking
 async def retrieve_relevant_chunks(document_id: int, query_text: str) -> list[models.Chunk]:
     log.info(f"Retrieving single doc (Stage 1: Vector Search)...")
     query_embedding = EMBEDDING_MODEL.encode(query_text)
@@ -155,7 +152,7 @@ async def retrieve_relevant_chunks(document_id: int, query_text: str) -> list[mo
     return rerank_chunks(query_text, initial_chunks, top_k=5) # คัดเหลือ 5
 
 
-# ... (generate_answer ยังไม่ต้องแก้ เดี๋ยวแก้ใน Task 12 ทีเดียว) ...
+# generate_answer
 async def generate_answer(
     query: str, 
     context_chunks: list[models.Chunk],

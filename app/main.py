@@ -1,12 +1,12 @@
 import asyncio
-import logging 
 from datetime import timedelta
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile
 from typing import Annotated
 from sqlalchemy.ext.asyncio import AsyncSession
-from app import crud, models, schemas # <-- Import ห้องครัว, ตาราง, API
-from app.database import engine, Base, get_db # <-- Import เครื่องยนต์, รุ่นพ่อ, คนงาน
+from app import crud, models, schemas
+from app.database import get_db 
 from app.config import settings
 from app.security import (
     verify_password, 
@@ -14,48 +14,34 @@ from app.security import (
     verify_token,
     oauth2_scheme,
 )
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, BackgroundTasks
-import time
 from app import processing
 import sqlalchemy as sa
 import os
 from app.processing import UPLOAD_DIRECTORY
-from app.knowledge_graph import driver, check_neo4j_connection, close_neo4j_driver, get_document_graph
-from contextlib import asynccontextmanager # <--- เพิ่มบรรทัดนี้
+from app.knowledge_graph import check_neo4j_connection, close_neo4j_driver, get_document_graph
+from contextlib import asynccontextmanager
 
-# --- (ใหม่!) จัดการ Life Cycle (เปิด/ปิด Neo4j) ---
+# จัดการ Life Cycle (เปิด/ปิด Neo4j) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. ตอนเริ่มแอป: เช็กการเชื่อมต่อ Neo4j
+    # ตอนเริ่มแอป: เช็กการเชื่อมต่อ Neo4j
     if not await check_neo4j_connection():
         print("⚠️ WARNING: Could not connect to Neo4j!")
     
     yield # ปล่อยให้แอปทำงาน
     
-    # 2. ตอนปิดแอป: ปิดการเชื่อมต่อ
+    # ตอนปิดแอป: ปิดการเชื่อมต่อ
     await close_neo4j_driver()
 
-# --- "สร้าง" ตาราง (Table) ---
-# เราจะบอกให้แอป "สร้างตาราง" (ถ้ายังไม่มี) ตอนที่มันเริ่มทำงาน
-# (นี่คือวิธีง่ายๆ... Task ต่อไปเราจะใช้ "Alembic" ที่โปรขึ้น)
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="0.1.0",
     lifespan=lifespan 
 )
 
-# alembic จะจัดการเรื่องตารางให้เราเอง
-# @app.on_event("startup")
-# async def on_startup():
-#     """Create the database tables on startup."""
-#     async with engine.begin() as conn:
-#         # await conn.run_sync(Base.metadata.drop_all) # <-- (ไว้ล้างตาราง ถ้าอยากเริ่มใหม่)
-#         await conn.run_sync(Base.metadata.create_all)
+# --- Auth Functions ---
 
-
-# --- Auth Functions (อัปเกรดแล้ว!) ---
-
-# เราจะ "เปลี่ยน" get_current_user ให้ "คุย" กับ DB จริง
+# get_current_user from db
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     db: AsyncSession = Depends(get_db) # <-- "ฉีด" DB Session เข้ามา
@@ -84,6 +70,7 @@ async def get_current_user(
 
 # --- Endpoints ---
 
+# Root Endpoint
 @app.get("/")
 def read_root():
     return {"message": f"Welcome to {settings.PROJECT_NAME} API!"}
@@ -93,7 +80,7 @@ def health_check():
     return {"status": "ok"}
 
 
-# (ใหม่!) Endpoint "สมัครสมาชิก" (Sign Up)
+# Endpoint "สมัครสมาชิก" (Sign Up)
 @app.post("/users/", response_model=schemas.User)
 async def create_user_endpoint(
     user: schemas.UserCreate, # <-- รับ "พิมพ์เขียว" สมัคร
@@ -112,13 +99,13 @@ async def create_user_endpoint(
     return await crud.create_user(db=db, user=user)
 
 
-# Endpoint "Login" (อัปเกรดแล้ว!)
+# Endpoint "Login"
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: AsyncSession = Depends(get_db) # <-- "ฉีด" DB Session
 ):
-    # 1. ตรวจสอบ User/Password (ใน DB จริง!)
+    # 1. ตรวจสอบ User/Password จาก DB
     user = await crud.get_user_by_username(db, username=form_data.username)
 
     # 2. เช็กว่า user มีจริงไหม และ รหัสผ่านตรงกันไหม
@@ -137,7 +124,7 @@ async def login_for_access_token(
             detail="Inactive user"
         )
 
-    # 3. สร้าง Token (เหมือนเดิม)
+    # 3. สร้าง Token 
     access_token_expires = timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -149,18 +136,14 @@ async def login_for_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# Endpoint ที่ "ถูกป้องกัน" (อัปเกรดแล้ว!)
+# Endpoint ที่ "ถูกป้องกัน" (ต้อง Login ก่อน)
 @app.get("/users/me", response_model=schemas.User)
 async def read_users_me(
     current_user: Annotated[models.User, Depends(get_current_user)]
 ):
-    # ฟังก์ชันนี้ "แทบ" ไม่ต้องแก้เลย
-    # มันจะคืนค่า User (จาก DB) ที่ "สะอาด" (ตาม response_model)
-    # Pydantic (schemas.User) จะ "อ่าน" (from_attributes=True)
-    # จาก current_user (models.User) ให้เราเอง
     return current_user
 
-# (ใหม่!) Endpoint "อัปโหลดเอกสาร"
+# Endpoint "อัปโหลดเอกสาร"
 @app.post("/documents/", response_model=schemas.Document)
 async def create_document_and_upload_file(
     db: AsyncSession = Depends(get_db), 
@@ -177,9 +160,9 @@ async def create_document_and_upload_file(
         owner_id=current_user.id
     )
 
-    # (3) "โยน" งาน "หนัก" (สกัด, หั่น, แปลง, เซฟ)
+    # (3) "โยน" งาน "หนัก" (extract, chunk, embed, save)
     asyncio.create_task(
-        # (เรียก "ห้องครัว" (processing) "โดยตรง")
+        # (เรียก processing)
         processing.save_extract_chunk_and_embed( 
             document_id=db_doc.id,
             filename=file.filename,
@@ -191,7 +174,7 @@ async def create_document_and_upload_file(
     # (4) "ตอบ" User กลับไป "ทันที"
     return db_doc
 
-# (ใหม่!) Endpoint ดูรายการเอกสารของตัวเอง
+# Endpoint ดูรายการเอกสารของตัวเอง
 @app.get("/documents/", response_model=list[schemas.Document])
 async def read_documents(
     db: AsyncSession = Depends(get_db),
@@ -205,9 +188,7 @@ async def read_documents(
     result = await db.execute(stmt)
     return result.scalars().all()
 
-# app/main.py
-
-# (ใหม่!) Endpoint "ดู Chunks ของเอกสาร"
+# Endpoint "ดู Chunks ของเอกสาร"
 @app.get("/documents/{doc_id}/chunks", response_model=list[schemas.Chunk])
 async def read_document_chunks(
     doc_id: int,
@@ -216,7 +197,7 @@ async def read_document_chunks(
 ):
     # (เราจะ "Query" 2 ชั้น... เพื่อ "ความปลอดภัย")
 
-    # 1. "เช็ก" ว่า "แม่" (Document) เป็นของเราไหม
+    # 1. "เช็ก" ว่า Document เป็นของเราไหม
     stmt_doc = (
         sa.select(models.Document)
         .where(models.Document.id == doc_id)
@@ -234,7 +215,7 @@ async def read_document_chunks(
     result_chunks = await db.execute(stmt_chunks)
     return result_chunks.scalars().all()
 
-# (ใหม่!) Endpoint ถาม-ตอบ (RAG)
+# Endpoint ถาม-ตอบ (RAG)
 @app.post(
     "/documents/{doc_id}/query", 
     response_model=schemas.QueryResponse
@@ -274,7 +255,7 @@ async def query_document(
         context=relevant_chunks
     )
 
-# --- (ใหม่!) Endpoint ถาม-ตอบ (Global Context - Task 8.5) ---
+# Endpoint ถาม-ตอบ (Global Context) ---
 @app.post(
     "/documents/query", # <--- ไม่มี {doc_id} แล้ว
     response_model=schemas.QueryResponse
@@ -302,7 +283,7 @@ async def query_all_documents(
         context=relevant_chunks
     )
 
-# --- (ใหม่!) Endpoint ลบเอกสาร (Task 8.6) ---
+# Endpoint ลบเอกสาร ---
 @app.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     doc_id: int,
@@ -331,7 +312,7 @@ async def delete_document(
     
     return None
 
-# (ใหม่!) Endpoint ดึงกราฟ (Task 10)
+# Endpoint ดึงกราฟ
 @app.get("/documents/{doc_id}/graph", response_model=schemas.GraphData)
 async def get_document_graph_data(
     doc_id: int,

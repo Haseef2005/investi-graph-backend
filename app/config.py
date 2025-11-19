@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # โหลดไฟล์ .env
-    # (ผมแถม extra="ignore" ให้ครับ เผื่อใน .env มีตัวแปรเกิน มันจะได้ไม่ Error)
+    # extra="ignore" เผื่อใน .env มีตัวแปรเกิน มันจะได้ไม่ Error
     model_config = SettingsConfigDict(
         env_file=".env", 
         env_file_encoding="utf-8",
@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "groq"
     LLM_API_KEY: str
 
-    # --- 4. (เพิ่มใหม่!) Neo4j Settings ---
-    NEO4J_URI: str = "bolt://localhost:7687" # ใส่ Default ไว้กันลืม
+    # --- 4. Neo4j Settings ---
+    NEO4J_URI: str = "bolt://localhost:7687" # ใส่ Default ไว้ก
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: str
 

@@ -1,5 +1,3 @@
-# app/models.py
-# app/models.py
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -19,9 +17,7 @@ class User(Base):
 
     # (เราจะเพิ่ม Full Name, etc. ทีหลัง)
 
-# (ต่อจาก class User)
-
-# (ใหม่!) ตาราง "แม่" (เก็บแค่ "ชื่อไฟล์")
+# ตาราง "แม่" (เก็บแค่ "ชื่อไฟล์")
 class Document(Base):
     __tablename__ = "documents"
 
@@ -35,7 +31,7 @@ class Document(Base):
     chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan") 
 
 
-# (ใหม่!) ตาราง "ลูก" (เก็บ "ชิ้นส่วน" + "Vector")
+# ตาราง "ลูก" (เก็บ "ชิ้นส่วน" + "Vector")
 class Chunk(Base):
     __tablename__ = "chunks"
 
