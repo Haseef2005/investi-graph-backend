@@ -8,6 +8,7 @@ from app import processing, crud, models
 from app.database import SessionLocal
 import logging
 import re
+from app.utils import smart_crop_content
 
 log = logging.getLogger("uvicorn.error")
 
@@ -63,63 +64,22 @@ def clean_html_content(raw_content: str) -> str:
     text = re.sub(r'\b[a-z0-9]+:[A-Za-z0-9_]+\b', '', text)
     
     # การตัดหน้าปกและสารบัญ ---
-    text = crop_document_content(text)
+    text = smart_crop_content(text)
     # ลบ Whitespace ซ้ำซ้อน
     text = " ".join(text.split())
     
     return text
 
-# --- ฟังก์ชันใหม่สำหรับตัดเนื้อหา ---
-def crop_document_content(text: str) -> str:
-    """
-    ตัดส่วนหัว (Cover/TOC) และส่วนท้าย (Exhibits/Signatures) ออก
-    ให้เหลือเฉพาะเนื้อหาหลัก (Item 1 - Item 15)
-    """
-    
-    # 1. หาจุดเริ่มต้น: "Item 1. Business"
-    # (Regex: หาคำว่า Item ตามด้วยเลข 1 จุด และ Business แบบไม่สนใจตัวพิมพ์เล็กใหญ่)
-    # หมายเหตุ: สารบัญมักจะมี Item 1. Business เหมือนกัน แต่เราจะใช้ Logic ว่า
-    # "ถ้าเจอหลายอัน ให้เอาอันที่ 2 (ที่เป็นหัวข้อจริง)" หรือ "เอาอันที่อยู่ลึกกว่า"
-    
-    start_pattern = r"Item\s+1\.?\s+Business"
-    matches = list(re.finditer(start_pattern, text, re.IGNORECASE))
-    
-    start_index = 0
-    if len(matches) >= 2:
-        # ถ้าเจอมากกว่า 1 (แปลว่ามีสารบัญ) -> ให้เริ่มที่อันที่ 2 (อันที่ 1 คือสารบัญ)
-        start_index = matches[1].start()
-        print("✂️ Cropping: Found TOC, starting at 2nd occurrence of Item 1.")
-    elif len(matches) == 1:
-        # ถ้าเจออันเดียว -> เริ่มตรงนั้นเลย
-        start_index = matches[0].start()
-        print("✂️ Cropping: Found Start of Item 1.")
-    else:
-        print("⚠️ Cropping: 'Item 1. Business' not found. Using full text.")
-
-    # 2. หาจุดจบ: "Item 15. Exhibits" หรือ "Signatures"
-    # เพื่อตัดส่วนท้ายที่รกรุงรังออก
-    end_pattern = r"(Item\s+15\.?\s+Exhibits|SIGNATURES)"
-    end_match = re.search(end_pattern, text[start_index:], re.IGNORECASE)
-    
-    end_index = len(text)
-    if end_match:
-        # ต้องบวก start_index กลับเข้าไปเพราะเรา search ใน substring
-        end_index = start_index + end_match.start()
-        print("✂️ Cropping: Found End of document (Item 15/Signatures).")
-        
-    # 3. ตัดฉับ! 🗡️
-    cropped_text = text[start_index:end_index]
-    
-    # กันเหนียว: ถ้าตัดแล้วเหลือสั้นจุ๊ดจู๋ (ผิดพลาด) ให้คืนค่าเดิมไป
-    if len(cropped_text) < 1000:
-        print("⚠️ Cropping result too short. Reverting to full text.")
-        return text
-        
-    return cropped_text
-
 async def fetch_and_process_10k(user_id: int, ticker: str, amount: int = 1):
     ticker = ticker.upper()
     log.info(f"🔍 Fetching 10-K for {ticker}...")
+
+    company_dir = os.path.join(TEMP_SEC_DIR, "sec-edgar-filings", ticker)
+
+    if os.path.exists(company_dir):
+        log.info(f"🧹 Cleaning up old data for {ticker}...")
+        shutil.rmtree(company_dir)
+
     dl = Downloader("Investi-Graph", settings.SEC_API_EMAIL, TEMP_SEC_DIR)
 
     try:
@@ -131,6 +91,8 @@ async def fetch_and_process_10k(user_id: int, ticker: str, amount: int = 1):
         if not files:
             log.error(f"No 10-K found for {ticker}")
             return
+        
+        files.sort(reverse=True)
 
         file_path = files[0]
         log.info(f"📂 Found file: {file_path}")
@@ -142,6 +104,7 @@ async def fetch_and_process_10k(user_id: int, ticker: str, amount: int = 1):
         # --- 4. Clean HTML ก่อนใช้งาน ---
         log.info("🧹 Cleaning HTML content...")
         clean_text = clean_html_content(raw_content)
+        clean_text = smart_crop_content(clean_text)
         log.info(f"Cleaned text length: {len(clean_text)}")
         
         # แปลงเป็น bytes

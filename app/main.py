@@ -310,7 +310,10 @@ async def delete_document(
         
     # 3. ลบกราฟออกจาก Neo4j ---
     # (สั่งลบก่อนลบใน DB เผื่อมี Error จะได้รู้ แต่จริงๆ ไว้หลังก็ได้)
-    await delete_document_graph(doc_id)
+    try:
+        await delete_document_graph(doc_id)
+    except Exception as e:
+        print(f"⚠️ Failed to delete graph: {e}")
     # ------------------------------------
 
     # 4. ลบออกจาก Database (Cascade Rule จะลบ Chunks ใน PG ให้เอง)
