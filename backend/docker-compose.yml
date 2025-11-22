@@ -1,0 +1,60 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  
+  # --- 1. บริการ "แอป" (FastAPI) ---
+  app:
+    build: .  # บอกให้ "สร้าง" Image จาก Dockerfile ที่อยู่ในโฟลเดอร์นี้
+    container_name: investi_app
+    ports:
+      - "8000:8000" # "เชื่อม" Port 8000 ของเครื่องเรา -> ไปยัง Port 8000 ของ Container
+    volumes:
+      - .:/app  # "เชื่อม" โฟลเดอร์โค้ดปัจจุบัน -> เข้าไปใน /app
+                # (ทำให้เราแก้โค้ดที่เครื่องเรา แล้วแอปใน Docker รีเฟรชตาม)
+    environment:
+      # นี่คือ "สะพาน" เชื่อม .env ของเราเข้า Container
+      - PROJECT_NAME=${PROJECT_NAME}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - DATABASE_URL=${DATABASE_URL} 
+      - PYTHONUNBUFFERED=1
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - LLM_API_KEY=${LLM_API_KEY}
+    depends_on:
+      - db # บอกว่า "ห้าม" สตาร์ท จนกว่า 'db' จะพร้อม
+
+  # --- 2. บริการ "ฐานข้อมูล" (PostgreSQL) ---
+  db:
+    image: pgvector/pgvector:pg15 # "ดึง" Image สำเร็จรูปของ Postgres 15 มาเลย
+    container_name: investi_db
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-mysecretpassword}
+      POSTGRES_DB: ${DATABASE_NAME:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # "เก็บ" ข้อมูล DB ไว้ แม้จะปิด Container
+    ports:
+      - "5432:5432" # เชื่อม Port 5432 (เผื่อเราอยากใช้โปรแกรมข้างนอกส่อง DB)
+
+  # Neo4j Service
+  neo4j:
+    image: neo4j:latest
+    hostname: neo4j
+    container_name: neo4j
+    ports:
+      - "7474:7474" # Browser interface (optional)
+      - "7687:7687" # Bolt port (สำหรับเชื่อมต่อจาก App)
+    volumes:
+      - neo4j_data:/data # สำหรับเก็บข้อมูลกราฟ
+    environment:
+      # ตั้งรหัสผ่านให้ Neo4j
+      NEO4J_AUTH: neo4j/mysecretneo4jpassword # user/password (ตั้งตามนี้เลย)
+      # ให้ Neo4j อนุญาตการเชื่อมต่อจากที่อื่น
+      #NEO4J_dbms_connector_bolt_advertised__address: "localhost:7687"
+    restart: always
+
+volumes:
+  postgres_data: # สร้าง "ที่เก็บข้อมูล" ชื่อ postgres_data
+  neo4j_data:
