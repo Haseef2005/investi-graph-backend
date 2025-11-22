@@ -1,48 +1,31 @@
 # InvestiGraph
-
-## Project Structure
-- **`backend/`**: FastAPI application, Database, Docker config.
-- **`frontend/`**: React application.
-
-## How to Run Locally
-
-### 1. Backend
-The backend code is now in the `backend/` folder. You need to run commands from there.
-
-```bash
-# Open a new terminal
-cd backend
-
-# Create/Activate virtual environment (if you haven't)
-python -m venv venv
-.\venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the server
-uvicorn app.main:app --reload
-```
-*Backend will run at http://localhost:8000*
-
-### 2. Frontend
-```bash
-# Open a new terminal
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run the dev server
-npm run dev
-```
-*Frontend will run at http://localhost:5173*
-
-## How to Run with Docker
-
-The `docker-compose.yml` is located in the `backend/` directory and currently manages the Backend, Database, and Neo4j.
-
-```bash
-cd backend
-docker-compose up --build
-```
+InvestiGraph is an advanced financial analysis tool that leverages Knowledge Graphs and GraphRAG (Retrieval-Augmented Generation) to extract, structure, and query insights from SEC 10-K documents.
+## 🚀 Work Technique
+The system employs a sophisticated pipeline to transform unstructured financial text into a structured knowledge graph:
+1.  **Data Ingestion**: Downloads and parses SEC 10-K filings using `sec-edgar-downloader` and `beautifulsoup4`.
+2.  **Graph Extraction**: Utilizes LLMs (Llama 3.1 via LiteLLM) to intelligently extract entities (Companies, People, Products) and relationships (CEO_OF, COMPETES_WITH, etc.) from text chunks.
+3.  **Graph Storage**: Stores the extracted knowledge in a **Neo4j** graph database, ensuring data isolation per user and document.
+4.  **GraphRAG Querying**: Enhances RAG by querying the knowledge graph for relevant connections based on user questions, providing context-aware answers that standard vector search might miss.
+5.  **Reranking**: Uses a Cross-Encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`) to re-score and rank the retrieved documents, ensuring the most relevant context is passed to the LLM.
+## 🏗️ Project Structure
+- **`backend/`**: The core API and logic.
+    - **`app/`**: FastAPI application source code.
+        - **`knowledge_graph.py`**: Core logic for graph extraction, storage, and querying.
+        - **`sec_service.py`**: Handling SEC document downloading and processing.
+        - **`routers/`**: API endpoints for auth, users, and documents.
+- **`frontend/`**: The user interface.
+    - Built with React and Vite for a fast, modern experience.
+    - Uses Tailwind CSS for styling and Framer Motion for animations.
+## 🛠️ Tech Stack
+### Backend
+- **Framework**: FastAPI
+- **Database**: Neo4j (Graph), PostgreSQL (User data via SQLAlchemy/AsyncPG)
+- **AI/LLM**: LiteLLM (Llama 3.1), Sentence Transformers (Embeddings & Reranking)
+- **Reranker**: Cross-Encoder (`ms-marco-MiniLM-L-6-v2`)
+- **Tools**: Tenacity (Retries), Pydantic (Validation)
+### Frontend
+- **Framework**: React (Vite)
+- **Styling**: Tailwind CSS
+- **HTTP Client**: Axios
+- **Routing**: React Router DOM
+- **Animation**: Framer Motion
