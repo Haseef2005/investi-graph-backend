@@ -29,3 +29,55 @@ The system employs a sophisticated pipeline to transform unstructured financial 
 - **HTTP Client**: Axios
 - **Routing**: React Router DOM
 - **Animation**: Framer Motion
+## 🚦 Getting Started
+### Prerequisites
+- **Docker** & **Docker Compose** (for Backend & Databases)
+- **Node.js** (v18+ recommended) & **npm** (for Frontend)
+### Backend Setup
+1.  Navigate to the backend directory:
+    ```bash
+    cd backend
+    ```
+2.  Create a `.env` file (based on `.env.example` if available) and configure your environment variables (LLM API keys, Database credentials, etc.).
+    ```env
+    PROJECT_NAME="Investi-Graph"
+    # `openssl rand -hex 32` in git bash or use a web key generator
+    JWT_SECRET_KEY="your_super_secret_key_here"
+    JWT_ALGORITHM="HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES=30
+    # --- DB Settings (For Docker Compose) ---
+    DATABASE_USER=postgres
+    DATABASE_PASSWORD=mysecretpassword
+    DATABASE_NAME=postgres
+    DATABASE_HOST=localhost # <-- Use Docker service name "db" from docker-compose.yml. If running locally, change to "localhost"
+    DATABASE_PORT=5432
+    # Database (Using postgresql+psycopg)
+    # Format: dialect+driver://username:password@host:port/database_name
+    DATABASE_URL="postgresql+psycopg://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}"
+    LLM_PROVIDER="groq"
+    LLM_API_KEY="gsk_..."
+    # --- Neo4j Graph Database Settings ---
+    NEO4J_URI=bolt://localhost:7687 # <-- docker use neo4j
+    NEO4J_USER=neo4j
+    NEO4J_PASSWORD=mysecretneo4jpassword
+    SEC_API_EMAIL="your_email@example.com"
+    ```
+3.  Start the services using Docker Compose:
+    ```bash
+    docker-compose up --build
+    ```
+    This will start FastAPI, PostgreSQL, and Neo4j.
+### Frontend Setup
+1.  Navigate to the frontend directory:
+    ```bash
+    cd frontend
+    ```
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+3.  Start the development server:
+    ```bash
+    npm run dev
+    ```
+4.  Open your browser and visit `http://localhost:5173` (or the port shown in the terminal).
